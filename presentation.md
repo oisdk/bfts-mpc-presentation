@@ -344,3 +344,13 @@ levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
             └╫─2 ║
              ╚═══╝
 ```
+
+---
+
+```haskell
+bft :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
+bft f = runPhases . go
+  where
+    go (x :& xs) = (:&) <$> now (f x) <*> later (traverse go xs)
+
+```
