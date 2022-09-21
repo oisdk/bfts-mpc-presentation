@@ -51,7 +51,19 @@ dfe tree == [3,1,1,5,4,9,2]
 
 # Enumerations and Traversals
 
-We're not just interested in enumeration, we're interested in *traversal*
+We're not just interested in enumeration, we're interested in *traversal*.
+
+For instance, renumbering.
+
+```haskell
+
+         ╭                         ╮
+renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 3 :& []
+         │             , 5 :& []]  │               , 4 :& []]
+         │      , 4 :& [ 9 :& []   │        , 5 :& [ 6 :& []
+         │             , 2 :& []]] │               , 7 :& []]]
+         ╰                         ╯
+```
 
 ---
 
@@ -78,10 +90,97 @@ instance Traversable Tree where
 
 ---
 
-# Enumerations and Traversals
+# Renumbering
 
-* Okasaki, Chris. ‘Breadth-First Numbering: Lessons from a Small Exercise in
-  Algorithm Design’. ICFP 2000.
+```haskell
+renumber t = evalState (traverse num t) 1
+  where
+    num _ = get <* modify succ
+```
 
 ---
 
+# Fusing traversals with Staging
+
+```haskell
+       ╭                         ╮
+repmin │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 1 :& [ 1 :& []
+       │             , 5 :& []]  │               , 1 :& []]
+       │      , 4 :& [ 9 :& []   │        , 1 :& [ 1 :& []
+       │             , 2 :& []]] │               , 1 :& []]]
+       ╰                         ╯
+```
+
+. . .
+
+```haskell
+repmin :: Tree ℕ -> Tree ℕ
+repmin t = fmap (const m) t
+  where
+    m = minimum (dfe t)
+```
+
+---
+
+```haskell
+repmin t = let (u, m) = aux t m in u
+  where
+    aux :: Tree Int -> a -> (Tree a, Int)
+    aux (x :& xs) m = (m :& ys, minimum (x : ms))
+      where
+        (ys, ms) = unzip (map aux xs)
+```
+
+. . .
+
+```haskell
+repmin t = let (u, m) = aux t in u m
+  where
+    aux :: Tree Int -> (a -> Tree a, Int)
+    aux (x :& xs) = (\m -> m :& ys m, minimum (x : ms))
+      where
+        (ys, ms) = unzip (map aux xs)
+```
+
+---
+
+```haskell
+instance Monoid m => Applicative (m ,) where
+  pure x = (mempty, x)
+  (fm, f) <*> (xm, x) = (fm <> xm, f x)
+
+data BoundedAbove a = In a | Top
+
+instance Ord a => Monoid (BoundedAbove a) where
+  mempty = Top
+  Top <> x = x
+  x <> Top = x
+  In x <> In y = In (min x y)
+  
+getBounded :: BoundedAbove a -> a
+getBounded (In x) = x
+
+minimum :: Ord a => Tree a -> a
+minimum = getBounded . fst . traverse (\x -> (In x, ()))
+```
+
+---
+
+```haskell
+instance Applicative (a ->) where
+  pure x e = x
+  (f <*> x) e = f e (x e)
+  
+replace :: Tree a -> b -> Tree b
+replace = traverse (\_ e -> e)
+```
+
+---
+
+```haskell
+repmin t = replace t (minimum t)
+```
+
+--- 
+
+# Day convolution
