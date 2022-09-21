@@ -184,3 +184,147 @@ repmin t = replace t (minimum t)
 --- 
 
 # Day convolution
+
+```haskell
+data Day f g a
+  = Day (x -> y -> a) (f x) (g y)
+  
+instance (Applicative f, Applicative g) => Applicative (Day f g) where
+  pure x = Day (\_ _ -> x) (pure ()) (pure ())
+  Day f xl yl <*> Day x xr yr = 
+    Day (\(xl,xr) (yl,yr) -> f xl yl (x xr yr)) ((,) <$> xl <*> xr) ((,) <$> yl <*> yr)
+
+phase1 :: Applicative g => f a -> Day f g a
+phase1 x = Day const x (pure ())
+
+phase2 :: Applicative f => g a -> Day f g a
+phase2 = Day (const id) (pure ())
+```
+
+---
+
+# Commutativity
+
+---
+
+
+```haskell
+repminT :: (Traversable t, Ord a) => t a -> Day ((,) (BoundedAbove a)) ((->) (BoundedAbove a)) (t a)
+repminT = traverse (\x -> phase1 (In x, ()) *> phase2 inBound)
+
+runEnv :: Day ((,) e) ((->) e) a -> a
+runEnv (Day c (e,xs) ys) = c xs (ys e)
+
+repmin = runEnv . repminT
+```
+
+---
+
+# Multiple Phases
+
+```haskell
+data Phases f a where
+  Pure :: a -> Phases f a
+  Link :: (x -> y -> a) -> f x -> Phases f y -> Phases f a
+```
+
+Notice that this is the free applicative.
+
+But the applicative instance we're going to give it isn't:
+
+```haskell
+instance Applicative f => Applicative (Phases f) where
+  pure = Pure
+  Pure f <*> xs = fmap f xs
+  fs <*> Pure x = fmap ($x) fs
+  Link f x xs <*> Link g y ys = Link (\(l,r) (ls,rs) -> f l ls (g r rs)) ((,) <$> x <*> y) ((,) <$> xs <*> ys)
+```
+
+```haskell
+now :: f a -> Phases f a
+now x = Link const x (Pure ())
+
+later :: Applicative f => Phases f a -> Phases f a
+later = Link (const id) (pure ())
+
+
+phase :: Applicative f => Int -> f a -> Phases f a
+phase 0 x = now x
+phase n x = later (phase (n-1) x)
+```
+
+---
+
+# Sorting Leaves
+
+```haskell
+pop  :: State [a] a
+push :: a -> State [a] ()
+
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ do
+  traverse push t
+  modify sort
+  traverse (\_ -> pop) t
+  
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] (runPhases (
+  phase 0 (traverse push t) *>
+  phase 1 (modify sort) *>
+  phase 2 (traverse (\_ -> pop) t)))
+
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] (runPhases (
+  phase 1 (modify sort) *>
+  traverse (\x -> phase 0 (push x) *> phase 2 pop) t))
+```
+
+---
+
+# Breadth-First Traversals
+
+* Okasaki notice that breadth-first seems more difficult than depth-first.
+
+* Let's look at how we do breadth-first enumeration.
+
+```haskell
+levels :: Tree a → [[a]]
+levels (x :& xs) = [x] : foldr (lzw (++)) [] (map levels xs)
+
+lzw :: (a -> a -> a) -> [a] -> [a] -> [a]
+lzw f (x:xs) (y:ys) = f x y : lzw f xs ys
+lzw _ []     ys     = ys
+lzw _ xs     []     = xs
+
+       ╭                         ╮
+levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
+       │             , 5 :& []]  │
+       │      , 4 :& [ 9 :& []   │
+       │             , 2 :& []]] │
+       ╰                         ╯
+```
+
+--- 
+
+```
+
+   3──┬──1──┬──1
+      │     │
+      │     └──5
+      │
+      └──4──┬──9
+            │
+            └──2
+```
+---
+```
+ ╔═══╗ ╔═══╗ ╔═══╗
+ ║ 3─╫┬╫─1─╫┬╫─1 ║
+ ╚═══╝│║   ║│║   ║
+      │║   ║└╫─5 ║
+      │║   ║ ║   ║
+      └╫─4─╫┬╫─9 ║
+       ╚═══╝│║   ║
+            └╫─2 ║
+             ╚═══╝
+```
