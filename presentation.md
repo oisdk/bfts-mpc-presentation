@@ -162,7 +162,277 @@ repmin t = let m = minimum t in fmap (const m) t
 ## Repmin as a Traverse
 
 
+- 2 operations: minimum, and replacing.
+
+- Min can be done with the writer effect, and the "min" monoid.
+
+- Replace can be done with the reader effect.
+
+## Replace
+
+. . .
+
+```haskell
+ask       :: Reader e e
+runReader :: Reader e a -> e -> a
+```
+
+. . .
+
+```haskell
+replace :: Traversable t => t a -> e -> t e
+replace t = runReader (traverse (const ask) t)
+```
+
+
+## Minimum
+
+. . .
+
+```haskell
+tell       :: Monoid w => w -> Writer w ()
+execWriter :: Writer w a -> w
+
+execWriter (x <*> y) = execWriter x <> execWriter y
+```
+
+. . .
+
+```haskell
+data ⌈ a ⌉ = In a | Top
+instance Ord a => Monoid ⌈ a ⌉ where (<>) = min
+inBound (In x) = x
+```
+
+. . .
+
+```haskell
+minimum :: (Ord a, Traversable t) => t a -> a
+minimum = inBound . execWriter . traverse (tell . In)
+```
+
+## Combining
+
+```haskell
+repmin :: (Ord a, Traversable t) => t a -> t a
+repmin t = replace t (minimum t)
+```
+
+## Day Convolution
+
+
+```haskell
+data Day f g a = forall x y. Day (x -> y -> a) (f x) (g y)
+
+instance (Applicative f, Applicative g) => Applicative (Day f g) where ...
+
+phase1 :: Applicative g => f a -> Day f g a
+phase2 :: Applicative f => g a -> Day f g a
+```
+
+## Day Convolution for Fusing
+
+```haskell
+repmin  :: (Traversable t, Ord a) => t a -> t a
+
+
+repmin  t = replace t (minimum t)
+```
+
+## Day Convolution for Fusing
+
+```haskell
+repmin  :: (Traversable t, Ord a) => t a -> t a
+
+
+repmin  t = 
+  runReader  (traverse (\_ -> inBound <$> ask) t) $
+  execWriter (traverse (\x -> tell (In x)) t)
+```
+
+## Day Convolution for Fusing
+
+```haskell
+repminE :: (Traversable t, Ord a) 
+        => t a 
+        -> Day (Writer ⌈ a ⌉) (Reader ⌈ a ⌉) (t a)
+repminE t = 
+  phase2     (traverse (\_ -> inBound <$> ask) t) <*
+  phase1     (traverse (\x -> tell (In x)) t)
+```
+
+. . .
+
+```haskell
+repmin :: (Traversable t, Ord a) => t a -> t a
+repmin = loopDay . repminE
+
+loopDay :: Day (Writer a) (Reader a) b -> b
+loopDay (Day f xs ys) = 
+  let (x, e) = runWriter xs 
+  in  f x (runReader ys e)
+```
+
+## Day Convolution for Fusing
+
+```haskell
+repminE :: (Traversable t, Ord a) 
+        => t a 
+        -> Day (Writer ⌈ a ⌉) (Reader ⌈ a ⌉) (t a)
+repminE t = 
+             (traverse (\_ -> phase2 (inBound <$> ask)) t) <*
+             (traverse (\x -> phase1 (tell (In x))) t)
+```
+
+```haskell
+repmin :: (Traversable t, Ord a) => t a -> t a
+repmin = loopDay . repminE
+
+loopDay :: Day (Writer a) (Reader a) b -> b
+loopDay (Day f xs ys) = 
+  let (x, e) = runWriter xs 
+  in  f x (runReader ys e)
+```
+
+## Day Convolution for Fusing
+
+```haskell
+repminE :: (Traversable t, Ord a) 
+        => t a 
+        -> Day (Writer ⌈ a ⌉) (Reader ⌈ a ⌉) (t a)
+repminE t = 
+              traverse (\x -> phase2 (inBound <$> ask) <* 
+                              phase1 (tell (In x))) t
+```
+
+```haskell
+repmin :: (Traversable t, Ord a) => t a -> t a
+repmin = loopDay . repminE
+
+loopDay :: Day (Writer a) (Reader a) b -> b
+loopDay (Day f xs ys) = 
+  let (x, e) = runWriter xs 
+  in  f x (runReader ys e)
+```
+
+## Commutativity
+
+```haskell
+                    f x ⊗ g y = twist <$> g y ⊗ f x
+-------------------------------------------------------------------------
+  traverse f t ⊗ traverse g t = unzip <$> traverse (\x -> f x ⊗ g x) t
+```
+
+```haskell
+twist :: (a, b) -> (b, a)
+unzip :: f (a, b) -> (f a, f b)
+```
+
+# Multiple Phases
+
+## Phases Type
+
+```haskell
+data Phases f a where
+  Pure :: a -> Phases f a
+  Link :: (x -> y -> a) -> f x -> Phases f y -> Phases f a
+```
+
+. . .
+
+```haskell
+now   ::                         f a -> Phases f a
+later :: Applicative f => Phases f a -> Phases f a
+
+phase :: Applicative f => Int -> f a -> Phases f a
+phase 0 x = now x
+phase n x = later (phase (n-1) x)
+```
+
+## Sorting Leaves
+
+```haskell
+pop  :: State [a] a
+push :: a -> State [a] ()
+```
+
+. . .
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t =
+  flip evalState [] $
+             traverse push t                      *>
+             modify sort                          *>
+             traverse (\_ -> pop) t)
+ ```
+ 
+## Sorting Leaves
+
+```haskell
+pop  :: State [a] a
+push :: a -> State [a] ()
+```
+ 
+ ```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = 
+   flip evalState [] $ runPhases $
+     phase 1 (traverse push t)                     *>
+     phase 2 (modify sort)                         *>
+     phase 3 (traverse (\_ -> pop) t)))
+```
+
+## Sorting Leaves
+
+```haskell
+pop  :: State [a] a
+push :: a -> State [a] ()
+```
+ 
+ ```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = 
+   flip evalState [] $ runPhases $
+     phase 2 (modify sort)                         *>
+     phase 1 (traverse push t)                     *>
+     phase 3 (traverse (\_ -> pop) t)))
+```
+
+## Sorting Leaves
+
+```haskell
+pop  :: State [a] a
+push :: a -> State [a] ()
+```
+ 
+ ```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = 
+   flip evalState [] $ runPhases $
+     phase 2 (modify sort)                         *>
+             (traverse (\x -> phase 1 (push x)) t) *>
+             (traverse (\_ -> phase 3 pop) t)
+```
+
+## Sorting Leaves
+
+```haskell
+pop  :: State [a] a
+push :: a -> State [a] ()
+```
+ 
+ ```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = 
+   flip evalState [] $ runPhases $
+     phase 2 (modify sort)                         *>
+              traverse (\x -> phase 1 (push x)     *> phase 3 pop) t
+```
+
+
 <!--
+
 
 ```haskell
 repmin t = let (u, m) = aux t m in u
@@ -225,33 +495,8 @@ repmin t = replace t (minimum t)
 
 --- 
 
-# Day convolution
-
-```haskell
-data Day f g a
-  = Day (x -> y -> a) (f x) (g y)
-
-instance (Applicative f, Applicative g) => Applicative (Day f g) where
-  pure x = Day (\_ _ -> x) (pure ()) (pure ())
-  Day f xl yl <*> Day x xr yr = 
-    Day (\(xl,xr) (yl,yr) -> f xl yl (x xr yr)) (xl ⊗ xr) (yl ⊗ yr)
-
-phase1 :: Applicative g => f a -> Day f g a
-phase1 x = Day const x (pure ())
-
-phase2 :: Applicative f => g a -> Day f g a
-phase2 = Day (const id) (pure ())
-```
-
 ---
 
-# Commutativity
-
-```haskell
-                    f x ⊗ g y = twist <$> g y ⊗ f x
--------------------------------------------------------------------------
-  traverse f t ⊗ traverse g t = unzip <$> traverse (\x -> f x ⊗ g x) t
-```
 
 ---
 
@@ -288,52 +533,16 @@ instance Applicative f => Applicative (Phases f) where
   Link f x xs <*> Link g y ys = Link (\(l,r) (ls,rs) -> f l ls (g r rs)) (x ⊗ y) (xs ⊗ ys)
 ```
 
-```haskell
-now :: f a -> Phases f a
-now x = Link const x (Pure ())
-
-later :: Applicative f => Phases f a -> Phases f a
-later = Link (const id) (pure ())
-
-
-phase :: Applicative f => Int -> f a -> Phases f a
-phase 0 x = now x
-phase n x = later (phase (n-1) x)
-```
 
 ---
 
-# Sorting Leaves
-
-```haskell
-pop  :: State [a] a
-push :: a -> State [a] ()
-
-sortTree :: Ord a => Tree a -> Tree a
-sortTree t = flip evalState [] $ do
-  traverse push t
-  modify sort
-  traverse (\_ -> pop) t
-  
-sortTree :: Ord a => Tree a -> Tree a
-sortTree t = flip evalState [] (runPhases (
-  phase 0 (traverse push t) *>
-  phase 1 (modify sort) *>
-  phase 2 (traverse (\_ -> pop) t)))
-
-sortTree :: Ord a => Tree a -> Tree a
-sortTree t = flip evalState [] (runPhases (
-  phase 1 (modify sort) *>
-  traverse (\x -> phase 0 (push x) *> phase 2 pop) t))
-```
 
 ---
+-->
 
 # Breadth-First Traversals
 
-* Okasaki notice that breadth-first seems more difficult than depth-first.
-
-* Let's look at how we do breadth-first enumeration.
+## Breadth-First Enumeration
 
 ```haskell
 levels :: Tree a → [[a]]
@@ -343,7 +552,11 @@ lzw :: (a -> a -> a) -> [a] -> [a] -> [a]
 lzw f (x:xs) (y:ys) = f x y : lzw f xs ys
 lzw _ []     ys     = ys
 lzw _ xs     []     = xs
+```
 
+. . .
+
+```haskell
        ╭                         ╮
 levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
        │             , 5 :& []]  │
@@ -352,7 +565,8 @@ levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
        ╰                         ╯
 ```
 
---- 
+
+## Breadth-First Enumeration
 
 ```
 
@@ -365,7 +579,8 @@ levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
             └──2
 ```
 
----
+
+## Breadth-First Enumeration
 
 ```
  ┏━━━┓ ┏━━━┓ ┏━━━┓
@@ -379,29 +594,29 @@ levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
              ┗━━━┛
 ```
 
----
-
-```
- ╔═══╗ ╔═══╗ ╔═══╗
- ║ 3─╫┬╫─1─╫┬╫─1 ║
- ╚═══╝│║   ║│║   ║
-      │║   ║└╫─5 ║
-      │║   ║ ║   ║
-      └╫─4─╫┬╫─9 ║
-       ╚═══╝│║   ║
-            └╫─2 ║
-             ╚═══╝
-```
-
----
+## Breadth-First Traversal
 
 ```haskell
 bft :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
-bft f = runPhases . go
-  where
-    go (x :& xs) = (:&) <$> now (f x) <*> later (traverse go xs)
-
+bft f = runPhases . go where 
+  go (x :& xs) = (:&) <$> now (f x) <*> later (traverse go xs)
 ```
 
+. . .
 
--->
+```haskell
+renumber t = evalState (bft num t) 1 where num _ = get <* modify succ
+```
+
+. . .
+
+```haskell
+         ╭                         ╮
+renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 4 :& []
+         │             , 5 :& []]  │               , 5 :& []]
+         │      , 4 :& [ 9 :& []   │        , 3 :& [ 6 :& []
+         │             , 2 :& []]] │               , 7 :& []]]
+         ╰                         ╯
+```
+
+# Questions?
