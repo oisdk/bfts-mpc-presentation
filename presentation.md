@@ -18,7 +18,7 @@ patat:
 
 - Topics
 
-    * Basic breadth-first traversals
+    * Basic traversals, algorithms
 
     * Problems like *repmin*, *sort fringes*
     
@@ -45,6 +45,14 @@ type Forest a = [Tree a]
               , 5 :& []]           --        │   └─5
        , 4 :& [ 9 :& []            --        └─4─┬─9
               , 2 :& []]]          --            └─2
+```
+
+. . .
+
+```haskell
+df = [3,1,1,5,4,9,2]
+bf = [3,1,4,1,5,9,2]
+
 ```
 
 <!-- 
@@ -222,7 +230,8 @@ repmin t = replace t (minimum t)
 
 
 ```haskell
-data Day f g a = forall x y. Day (x -> y -> a) (f x) (g y)
+data Day f g a where
+  (:<*>) :: f (a -> b) -> g a -> Day f g b
 
 instance (Applicative f, Applicative g) => Applicative (Day f g) where ...
 
@@ -268,9 +277,9 @@ repmin :: (Traversable t, Ord a) => t a -> t a
 repmin = loopDay . repminE
 
 loopDay :: Day (Writer a) (Reader a) b -> b
-loopDay (Day f xs ys) = 
+loopDay (xs :<*> ys) = 
   let (x, e) = runWriter xs 
-  in  f x (runReader ys e)
+  in  x (runReader ys e)
 ```
 
 ## Day Convolution for Fusing
@@ -289,9 +298,9 @@ repmin :: (Traversable t, Ord a) => t a -> t a
 repmin = loopDay . repminE
 
 loopDay :: Day (Writer a) (Reader a) b -> b
-loopDay (Day f xs ys) = 
+loopDay (xs :<*> ys) = 
   let (x, e) = runWriter xs 
-  in  f x (runReader ys e)
+  in  x (runReader ys e)
 ```
 
 ## Day Convolution for Fusing
@@ -310,9 +319,9 @@ repmin :: (Traversable t, Ord a) => t a -> t a
 repmin = loopDay . repminE
 
 loopDay :: Day (Writer a) (Reader a) b -> b
-loopDay (Day f xs ys) = 
+loopDay (xs :<*> ys) = 
   let (x, e) = runWriter xs 
-  in  f x (runReader ys e)
+  in  x (runReader ys e)
 ```
 
 ## Commutativity
