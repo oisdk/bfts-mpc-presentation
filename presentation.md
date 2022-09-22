@@ -1,6 +1,5 @@
 ---
 title: Breadth-First Traversals via Staging
-author: Jeremy Gibbons, Donnacha Oisín Kidney, Tom Schrijvers, Nicolas Wu
 patat:
   theme:
     codeBlock: [vividBlack]
@@ -9,54 +8,127 @@ patat:
 
 ...
 
-# Important Types
+# Introduction
+
+## Overview
+
+- Jeremy Gibbons, *Oisín Kidney*, Tom Schrijvers, and Nicolas Wu
+
+- **Traversals** of **Trees**
+
+- Topics
+
+    * Basic breadth-first traversals
+
+    * Problems like *repmin*, *sort fringes*
+    
+    * *Applicatives*, *Traversables*, and *Free Applicatives*
+
+- Takeaway: a technique for **staging** effectful computations
+
+
+
+## Important Types
+
+. . .
 
 ```haskell
-data Tree   a = a :& Forest a
+data Tree   a = a :& [Tree a]
+
 type Forest a = [Tree a]
 ```
 
 . . .
 
 ```haskell
-tree = 
   3 :& [ 1 :& [ 1 :& []            --      3─┬─1─┬─1
               , 5 :& []]           --        │   └─5
        , 4 :& [ 9 :& []            --        └─4─┬─9
               , 2 :& []]]          --            └─2
 ```
 
----
+<!-- 
 
-# Enumerations and Traversals
+. . .
 
 ```haskell
 dfe :: Tree a -> [a]
 dfe (x :& xs) = x : concatMap dfe xs
 ```
 
+. . .
+
 ```haskell
-tree = 
-  3 :& [ 1 :& [ 1 :& []            --      3─┬─1─┬─1
-              , 5 :& []]           --        │   └─5
-       , 4 :& [ 9 :& []            --        └─4─┬─9
-              , 2 :& []]]          --            └─2
+    ╭                         ╮
+dfe │ 3 :& [ 1 :& [ 1 :& []   │ = [3,1,1,5,4,9,2]
+    │             , 5 :& []]  │
+    │      , 4 :& [ 9 :& []   │
+    │             , 2 :& []]] │
+    ╰                         ╯
+``` 
+
+
+-->
+
+## Applicative and Traversable
+
+. . .
+
+```haskell
+class Functor f => Applicative f where
+  pure  :: a -> f a
+  (<*>) :: f (a -> b) -> f a -> f b
+  
 ```
 
+. . .
+
 ```haskell
-dfe tree == [3,1,1,5,4,9,2]
+(⊗)  :: Applicative f => f a  -> f b  -> f (a, b)
+(<*) :: Applicative f => f a  -> f () -> f a
+(*>) :: Applicative f => f () -> f b  -> f b
 ```
 
----
-
-# Enumerations and Traversals
-
-We're not just interested in enumeration, we're interested in *traversal*.
-
-For instance, renumbering.
+. . .
 
 ```haskell
+class Foldable t => Traversable t where
+  traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
+```
 
+
+## Renumbering with Traverse
+
+. . .
+
+```haskell
+renumber :: Tree a -> Tree Int
+```
+
+. . .
+
+```haskell
+instance Traversable Tree where ...
+```
+
+. . .
+
+```haskell
+get       ::                 State Int Int
+modify    :: (Int -> Int) -> State Int ()
+evalState :: State Int a -> Int -> a
+```
+
+. . .
+
+```haskell
+renumber t = evalState (traverse num t) 1
+  where num _ = get <* modify succ
+```
+
+## Renumbering with Traverse
+
+```haskell
          ╭                         ╮
 renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 3 :& []
          │             , 5 :& []]  │               , 4 :& []]
@@ -65,47 +137,11 @@ renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 3 :& []
          ╰                         ╯
 ```
 
----
-
-# Applicative and Traversable
-
-```haskell
-class Functor f => Applicative f where
-  pure  :: a -> f a
-  (<*>) :: f (a -> b) -> f a -> f b
-  
-(⊗) :: Applicative f => f a -> f b -> f (a, b)
-xs ⊗ ys = (,) <$> xs <*> ys
-```
-
-```haskell
-class Foldable t => Traversable t where
-  traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
-```
-
-"Essence of the Iterator Pattern"
-
---- 
-
-```haskell
-instance Traversable Tree where
-  traverse f (x :& xs) = (:&) <$> f x <*> traverse (traverse f) xs
-
-```
-
----
-
-# Renumbering
-
-```haskell
-renumber t = evalState (traverse num t) 1
-  where
-    num _ = get <* modify succ
-```
-
----
-
 # Fusing traversals with Staging
+
+## Bird's repmin problem
+
+. . .
 
 ```haskell
        ╭                         ╮
@@ -119,13 +155,14 @@ repmin │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 1 :& [ 1 :& []
 . . .
 
 ```haskell
-repmin :: Tree ℕ -> Tree ℕ
-repmin t = fmap (const m) t
-  where
-    m = minimum (dfe t)
+repmin :: Tree Int -> Tree Int
+repmin t = let m = minimum t in fmap (const m) t
 ```
 
----
+## Repmin as a Traverse
+
+
+<!--
 
 ```haskell
 repmin t = let (u, m) = aux t m in u
@@ -365,3 +402,6 @@ bft f = runPhases . go
     go (x :& xs) = (:&) <$> now (f x) <*> later (traverse go xs)
 
 ```
+
+
+-->
