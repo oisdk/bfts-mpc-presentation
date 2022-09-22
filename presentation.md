@@ -73,6 +73,9 @@ renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 3 :& []
 class Functor f => Applicative f where
   pure  :: a -> f a
   (<*>) :: f (a -> b) -> f a -> f b
+  
+(⊗) :: Applicative f => f a -> f b -> f (a, b)
+xs ⊗ ys = (,) <$> xs <*> ys
 ```
 
 ```haskell
@@ -81,6 +84,8 @@ class Foldable t => Traversable t where
 ```
 
 "Essence of the Iterator Pattern"
+
+--- 
 
 ```haskell
 instance Traversable Tree where
@@ -188,11 +193,11 @@ repmin t = replace t (minimum t)
 ```haskell
 data Day f g a
   = Day (x -> y -> a) (f x) (g y)
-  
+
 instance (Applicative f, Applicative g) => Applicative (Day f g) where
   pure x = Day (\_ _ -> x) (pure ()) (pure ())
   Day f xl yl <*> Day x xr yr = 
-    Day (\(xl,xr) (yl,yr) -> f xl yl (x xr yr)) ((,) <$> xl <*> xr) ((,) <$> yl <*> yr)
+    Day (\(xl,xr) (yl,yr) -> f xl yl (x xr yr)) (xl ⊗ xr) (yl ⊗ yr)
 
 phase1 :: Applicative g => f a -> Day f g a
 phase1 x = Day const x (pure ())
@@ -204,6 +209,12 @@ phase2 = Day (const id) (pure ())
 ---
 
 # Commutativity
+
+```haskell
+                    f x ⊗ g y = twist <$> g y ⊗ f x
+-------------------------------------------------------------------------
+  traverse f t ⊗ traverse g t = unzip <$> traverse (\x -> f x ⊗ g x) t
+```
 
 ---
 
@@ -237,7 +248,7 @@ instance Applicative f => Applicative (Phases f) where
   pure = Pure
   Pure f <*> xs = fmap f xs
   fs <*> Pure x = fmap ($x) fs
-  Link f x xs <*> Link g y ys = Link (\(l,r) (ls,rs) -> f l ls (g r rs)) ((,) <$> x <*> y) ((,) <$> xs <*> ys)
+  Link f x xs <*> Link g y ys = Link (\(l,r) (ls,rs) -> f l ls (g r rs)) (x ⊗ y) (xs ⊗ ys)
 ```
 
 ```haskell
