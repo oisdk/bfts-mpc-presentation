@@ -20,11 +20,14 @@ patat:
 
     * Basic traversals, algorithms
 
-    * Problems like *repmin*, *sort fringes*
+    * Problems like *repmin*, *sort tree*
     
     * *Applicatives*, *Traversables*, and *Free Applicatives*
 
 - Takeaway: a technique for **staging** effectful computations
+
+    * The ability to **reorder** effects and values, **independently** of 
+      each other.
 
 
 
@@ -175,8 +178,8 @@ renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 3 :& []
          ╰                         ╯
 ```
 
-# Fusing traversals with Staging
 
+<!-- 
 ## Bird's repmin problem
 
 . . .
@@ -354,20 +357,11 @@ loopDay (xs :<*> ys) =
   in  x (runReader ys e)
 ```
 
-## Commutativity
+# Multiple Phases 
 
-```haskell
-                    f x ⊗ g y = twist <$> g y ⊗ f x
--------------------------------------------------------------------------
-  traverse f t ⊗ traverse g t = unzip <$> traverse (\x -> f x ⊗ g x) t
-```
+-->
 
-```haskell
-twist :: (a, b) -> (b, a)
-unzip :: f (a, b) -> (f a, f b)
-```
-
-# Multiple Phases
+# Fusing traversals with Staging
 
 ## Phases Type
 
@@ -379,16 +373,73 @@ data Phases f a where
 
 . . .
 
-```haskell
-now   ::                         f a -> Phases f a
-later :: Applicative f => Phases f a -> Phases f a
 
-phase :: Applicative f => Int -> f a -> Phases f a
-phase 0 x = now x
-phase n x = later (phase (n-1) x)
+```haskell
+instance Applicative f => Applicative (Phases f) where ...
 ```
 
-## Sorting Leaves
+## Phases Type: usage
+
+. . .
+
+```haskell
+runPhases :: Applicative f => Phases f a -> f a
+phase     :: Applicative f => Int -> f a -> Phases f a
+```
+
+. . .
+
+```haskell
+
+
+runPhases $            do phase 4 (putStrLn "a")
+                          phase 2 (putStrLn "b")
+                          phase 3 (putStrLn "c")
+                          phase 1 (putStrLn "d")
+                          phase 2 (putStrLn "e")
+```
+
+## Phases Type: usage
+
+```haskell
+runPhases :: Applicative f => Phases f a -> f a
+phase     :: Applicative f => Int -> f a -> Phases f a
+```
+
+```haskell
+
+
+runPhases $            do phase 4 (putStrLn "a")    --     > d
+                          phase 2 (putStrLn "b")    --     > b
+                          phase 3 (putStrLn "c")    --     > e
+                          phase 1 (putStrLn "d")    --     > c
+                          phase 2 (putStrLn "e")    --     > a
+```
+
+## Phases Type: usage
+
+```haskell
+runPhases :: Applicative f => Phases f a -> f a
+phase     :: Applicative f => Int -> f a -> Phases f a
+```
+
+```haskell
+out s = putStrLn s *> pure s
+
+runPhases $ sequenceA $ [ phase 4 (out      "a")    --     > d
+                        , phase 2 (out      "b")    --     > b
+                        , phase 3 (out      "c")    --     > e
+                        , phase 1 (out      "d")    --     > c
+                        , phase 2 (out      "e") ]  --     > a
+```
+
+. . .
+
+```haskell
+["a","b","c","d","e"]
+```
+
+## Sorting Tree Labels
 
 ```haskell
 pop  :: State [a] a
@@ -406,7 +457,7 @@ sortTree t =
              traverse (\_ -> pop) t)
  ```
  
-## Sorting Leaves
+## Sorting Tree Labels
 
 ```haskell
 pop  :: State [a] a
@@ -422,7 +473,7 @@ sortTree t =
      phase 3 (traverse (\_ -> pop) t)))
 ```
 
-## Sorting Leaves
+## Sorting Tree Labels
 
 ```haskell
 pop  :: State [a] a
@@ -438,7 +489,13 @@ sortTree t =
      phase 3 (traverse (\_ -> pop) t)))
 ```
 
-## Sorting Leaves
+## Applicative Morphism
+
+```haskell
+traverse (φ . f) = φ . traverse f
+```
+
+## Sorting Tree Labels
 
 ```haskell
 pop  :: State [a] a
@@ -454,7 +511,20 @@ sortTree t =
              (traverse (\_ -> phase 3 pop) t)
 ```
 
-## Sorting Leaves
+## Commutativity
+
+```haskell
+                    f x ⊗ g y = twist <$> g y ⊗ f x
+-------------------------------------------------------------------------
+  traverse f t ⊗ traverse g t = unzip <$> traverse (\x -> f x ⊗ g x) t
+```
+
+```haskell
+twist :: (a, b) -> (b, a)
+unzip :: f (a, b) -> (f a, f b)
+```
+
+## Sorting Tree Labels
 
 ```haskell
 pop  :: State [a] a
@@ -466,7 +536,8 @@ sortTree :: Ord a => Tree a -> Tree a
 sortTree t = 
    flip evalState [] $ runPhases $
      phase 2 (modify sort)                         *>
-              traverse (\x -> phase 1 (push x)     *> phase 3 pop) t
+              traverse (\x -> phase 1 (push x)     *> 
+                              phase 3 pop) t
 ```
 
 
@@ -633,7 +704,7 @@ levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
              ┗━━━┛
 ```
 
-## Breadth-First Traversal
+## Breadth-First Traversal!
 
 ```haskell
 bft :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
