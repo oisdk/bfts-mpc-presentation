@@ -47,12 +47,42 @@ type Forest a = [Tree a]
               , 2 :& []]]          --            └─2
 ```
 
-. . .
+## Traversal Orders
 
-```haskell
-df = [3,1,1,5,4,9,2]
-bf = [3,1,4,1,5,9,2]
+```
+   breadth-first                depth-first
 
+
+   3──┬──1──┬──1               3──┬──1──┬──1
+      │     │                     │     │
+      │     │                     │     │
+      │     └──5                  │     └──5
+      │                           │
+      │                           │
+      └──4──┬──9                  └──4──┬──9
+            │                           │
+            │                           │
+            └──2                        └──2
+```
+
+
+## Traversal Orders
+
+```
+   breadth-first                depth-first
+   ↓     ↓     ↓
+ ┏━━━┓ ┏━━━┓ ┏━━━┓           ┏━━━━━━━━━━━━━━━┓
+ ┃ 3─╂┬╂─1─╂┬╂─1 ┃         → ┃ 3──┬──1──┬──1 ┃
+ ┗━━━┛│┃   ┃│┃   ┃           ┗━━━━┿━━━━━┿━━━━┛
+      │┃   ┃│┃   ┃                │     │┏━━━┓
+      │┃   ┃└╂─5 ┃         →      │     └╂─5 ┃
+      │┃   ┃ ┃   ┃                │      ┗━━━┛
+      │┃   ┃ ┃   ┃                │┏━━━━━━━━━┓
+      └╂─4─╂┬╂─9 ┃         →      └╂─4──┬──9 ┃
+       ┗━━━┛│┃   ┃                 ┗━━━━┿━━━━┛
+            │┃   ┃                      │┏━━━┓
+            └╂─2 ┃         →            └╂─2 ┃
+             ┗━━━┛                       ┗━━━┛
 ```
 
 <!-- 
@@ -94,7 +124,7 @@ class Functor f => Applicative f where
 ```haskell
 (⊗)  :: Applicative f => f a  -> f b  -> f (a, b)
 (<*) :: Applicative f => f a  -> f () -> f a
-(*>) :: Applicative f => f () -> f b  -> f b
+(*>) :: Applicative f => f () -> f a  -> f a
 ```
 
 . . .
@@ -116,15 +146,15 @@ renumber :: Tree a -> Tree Int
 . . .
 
 ```haskell
-instance Traversable Tree where ...
+get       ::                 State Int Int
+modify    :: (Int -> Int) -> State Int ()
+evalState :: State Int a -> Int -> a
 ```
 
 . . .
 
 ```haskell
-get       ::                 State Int Int
-modify    :: (Int -> Int) -> State Int ()
-evalState :: State Int a -> Int -> a
+instance Traversable Tree where ...
 ```
 
 . . .
