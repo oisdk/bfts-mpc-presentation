@@ -499,13 +499,25 @@ runPhases $ sequenceA $ [ phase 4 (out      "a")    --     > d
 ## Phases Type: Commutativity
 
 ```haskell
-                         n /= m
--------------------------------------------------------------
-  phase n x ⊗ phase m y = twist <$> (phase m y ⊗ phase n x)
+n /= m ==> 
+  phase n x ⊗ phase m y == twist <$> (phase m y ⊗ phase n x)
 ```
 
 ```haskell
 twist :: (a, b) -> (b, a)
+```
+
+. . .
+
+```haskell
+n /= m ==>
+  phase n x <* phase m y == phase m y *> phase n x
+```
+
+. . .
+
+```haskell
+n /= m ==> phase n x `CommutesWith` phase m y
 ```
 
 
@@ -550,7 +562,7 @@ pop    :: State [a] a
  
  ```haskell
 sortTree :: Ord a => Tree a -> Tree a
-sortTree t = 
+sortTree t =
    flip evalState [] $ runPhases $
      phase 2 (modify sort)                         *>
      phase 1 (traverse push t)                     *>
@@ -560,7 +572,7 @@ sortTree t =
 . . .
 
 ```haskell
-traverse (φ . f) = φ . traverse f
+ φ . traverse f = traverse (φ . f)
 ```
 
 ## Sorting Tree Labels
@@ -579,17 +591,11 @@ sortTree t =
              (traverse (\_ -> phase 3 pop) t)
 ```
 
-## Commutativity
+## Sequential Fusion and Commutativity
 
 ```haskell
-                    f x ⊗ g y = twist <$> g y ⊗ f x
--------------------------------------------------------------------------
-  traverse f t ⊗ traverse g t = unzip <$> traverse (\x -> f x ⊗ g x) t
-```
-
-```haskell
-twist :: (a, b) -> (b, a)
-unzip :: f (a, b) -> (f a, f b)
+f `CommutesWith` g ==>
+  traverse f t *> traverse g t = traverse (\x -> f x *> g x) t
 ```
 
 ## Sorting Tree Labels
@@ -624,134 +630,93 @@ sortTree t =
                               phase 3 pop) t
 ```
 
-
-<!--
-
-
-```haskell
-repmin t = let (u, m) = aux t m in u
-  where
-    aux :: Tree Int -> a -> (Tree a, Int)
-    aux (x :& xs) m = (m :& ys, minimum (x : ms))
-      where
-        (ys, ms) = unzip (map aux xs)
-```
-
-. . .
-
-```haskell
-repmin t = let (u, m) = aux t in u m
-  where
-    aux :: Tree Int -> (a -> Tree a, Int)
-    aux (x :& xs) = (\m -> m :& ys m, minimum (x : ms))
-      where
-        (ys, ms) = unzip (map aux xs)
-```
-
----
-
-```haskell
-instance Monoid m => Applicative (m ,) where
-  pure x = (mempty, x)
-  (fm, f) <*> (xm, x) = (fm <> xm, f x)
-
-data BoundedAbove a = In a | Top
-
-instance Ord a => Monoid (BoundedAbove a) where
-  mempty = Top
-  Top <> x = x
-  x <> Top = x
-  In x <> In y = In (min x y)
-  
-getBounded :: BoundedAbove a -> a
-getBounded (In x) = x
-
-minimum :: Ord a => Tree a -> a
-minimum = getBounded . fst . traverse (\x -> (In x, ()))
-```
-
----
-
-```haskell
-instance Applicative (a ->) where
-  pure x e = x
-  (f <*> x) e = f e (x e)
-  
-replace :: Tree a -> b -> Tree b
-replace = traverse (\_ e -> e)
-```
-
----
-
-```haskell
-repmin t = replace t (minimum t)
-```
-
---- 
-
----
-
-
----
-
-
-```haskell
-repminT :: (Traversable t, Ord a) => t a -> Day ((,) (BoundedAbove a)) ((->) (BoundedAbove a)) (t a)
-repminT = traverse (\x -> phase1 (In x, ()) *> phase2 inBound)
-
-runEnv :: Day ((,) e) ((->) e) a -> a
-runEnv (Day c (e,xs) ys) = c xs (ys e)
-
-repmin = runEnv . repminT
-```
-
--->
-
 # Breadth-First Traversals
 
-## Breadth-First Enumeration
+## Traversal Orders
+
+```
+   breadth-first                depth-first
+   ↓     ↓     ↓
+ ┏━━━┓ ┏━━━┓ ┏━━━┓           ┏━━━━━━━━━━━━━━━┓
+ ┃ 3─╂┬╂─1─╂┬╂─1 ┃         → ┃ 3──┬──1──┬──1 ┃
+ ┗━━━┛│┃   ┃│┃   ┃           ┗━━━━┿━━━━━┿━━━━┛
+      │┃   ┃│┃   ┃                │     │┏━━━┓
+      │┃   ┃└╂─5 ┃         →      │     └╂─5 ┃
+      │┃   ┃ ┃   ┃                │      ┗━━━┛
+      │┃   ┃ ┃   ┃                │┏━━━━━━━━━┓
+      └╂─4─╂┬╂─9 ┃         →      └╂─4──┬──9 ┃
+       ┗━━━┛│┃   ┃                 ┗━━━━┿━━━━┛
+            │┃   ┃                      │┏━━━┓
+            └╂─2 ┃         →            └╂─2 ┃
+             ┗━━━┛                       ┗━━━┛
+
+   [3,1,4,2,5,9,2]            [3,1,1,5,4,9,2]
+```
+
+## Level-Wise Enumeration
+
+```
+
+   ↓     ↓     ↓
+ ┏━━━┓ ┏━━━┓ ┏━━━┓
+ ┃ 3─╂┬╂─1─╂┬╂─1 ┃
+ ┗━━━┛│┃   ┃│┃   ┃
+      │┃   ┃│┃   ┃
+      │┃   ┃└╂─5 ┃
+      │┃   ┃ ┃   ┃
+      │┃   ┃ ┃   ┃
+      └╂─4─╂┬╂─9 ┃
+       ┗━━━┛│┃   ┃
+            │┃   ┃
+            └╂─2 ┃
+             ┗━━━┛
+
+[[3],[1,4],[2,5,9,2]]
+```
+
+## Labelling With Level
 
 ```haskell
-levels :: Tree a → [[a]]
-levels = go 0 where
-  go n (x :& xs) = level n [x] <> foldr lzw [] (go (n+1) xs)
+        ╭                         ╮
+relevel │ 3 :& [ 1 :& [ 1 :& []   │ = 0 :& [ 1 :& [ 2 :& []
+        │             , 5 :& []]  │               , 2 :& []]
+        │      , 4 :& [ 9 :& []   │        , 1 :& [ 2 :& []
+        │             , 2 :& []]] │               , 2 :& []]]
+        ╰                         ╯
 ```
 
 . . .
 
 ```haskell
-lzw :: Monoid a => [a] -> [a] -> [a]
-lzw (x:xs) (y:ys) = (x <> y) : lzw xs ys
-lzw []     ys     = ys
-lzw xs     []     = xs
+relevel :: Tree a -> Tree Int
+relevel = go 0 where
+  go n (x :& xs) = n :& map (go (n+1)) xs
+```
+
+
+## Depth-First Traversal
+
+```haskell
+traverse :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
+traverse f = go where
+  go (x :& xs) = (:&) <$> f x <*> traverse go xs
+```
+
+## Combination
+
+```haskell
+traverse :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
+traverse f = go where
+  go (x :& xs) = (:&) <$> f x <*> traverse go xs
+```
+
+```haskell
+relevel :: Tree a -> Tree Int
+relevel = go 0 where
+  go n (x :& xs) = n :& map (go (n+1)) xs
 ```
 
 . . .
-
-```haskell
-level :: Monoid a => Int -> a -> [a]
-level 0     x = x
-level (n+1) x = mempty : level n x
-```
-
-## Breadth-First Enumeration
-
-```haskell
-levels :: Tree a → [[a]]
-levels = go 0 where
-  go n (x :& xs) = level n [x] <> foldr lzw [] (go (n+1) xs)
-```
-
-```haskell
-       ╭                         ╮
-levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[3],[1,4],[1,5,9,2]]
-       │             , 5 :& []]  │
-       │      , 4 :& [ 9 :& []   │
-       │             , 2 :& []]] │
-       ╰                         ╯
-```
-
-## Breadth-First Traversal
 
 ```haskell
 bft :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
@@ -759,13 +724,11 @@ bft f = runPhases . go 0 where
   go n (x :& xs) = (:&) <$> phase n (f x) <*> traverse (go (n+1)) xs
 ```
 
-. . .
+## Breadth-First Renumbering
 
 ```haskell
 renumber t = evalState (bft num t) 1 where num _ = get <* modify succ
 ```
-
-. . .
 
 ```haskell
          ╭                         ╮
