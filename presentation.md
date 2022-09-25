@@ -383,24 +383,156 @@ sortTree │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 1 :& [ 2 :& []
 ## Sorting Tree Labels
 
 ```haskell
-pop    :: State [a] a
 push   :: a -> State [a] ()
-modify :: ([a] -> [a]) -> State [a] ()
+pop    :: State [a] a
 ```
 
 . . .
 
 ```haskell
 sortTree :: Ord a => Tree a -> Tree a
-sortTree t =
-  flip evalState [] $
-             traverse push t                      *>
-             modify sort                          *>
-             traverse (\_ -> pop) t)
- ```
+sortTree t = flip evalState [] $ traverse push t         *>
+                                 modify sort             *>
+                                 traverse (\_ -> pop) t)
+```
+. . .
 
+```haskell
+tree =  3 :& [  1 :& [  1 :& []         stack = []
+                     ,  5 :& []]
+             ,  4 :& [  9 :& []
+                     ,  2 :& []]]
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ traverse push t         *> -- <--
+                                 modify sort             *>
+                                 traverse (\_ -> pop) t)
+```
+
+```haskell
+tree =  3 :& [  1 :& [  1 :& []         stack = []
+                     ,  5 :& []]
+             ,  4 :& [  9 :& []
+                     ,  2 :& []]]
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ traverse push t         *> -- <--
+                                 modify sort             *>
+                                 traverse (\_ -> pop) t)
+```
+
+```haskell
+tree = () :& [ () :& [ () :& []         stack = [3,1,1,5,9,4,2]
+                     , () :& []]
+             , () :& [ () :& []
+                     , () :& []]]
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ traverse push t         *>
+                                 modify sort             *> -- <--
+                                 traverse (\_ -> pop) t)
+```
+
+```haskell
+tree = () :& [ () :& [ () :& []         stack = [3,1,1,5,9,4,2]
+                     , () :& []]
+             , () :& [ () :& []
+                     , () :& []]]
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ traverse push t         *>
+                                 modify sort             *> -- <--
+                                 traverse (\_ -> pop) t)
+```
+
+```haskell
+tree = () :& [ () :& [ () :& []         stack = [1,1,2,3,4,5,9]
+                     , () :& []]
+             , () :& [ () :& []
+                     , () :& []]]
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ traverse push t         *>
+                                 modify sort             *>
+                                 traverse (\_ -> pop) t)    -- <--
+```
+
+```haskell
+tree = () :& [ () :& [ () :& []         stack = [1,1,2,3,4,5,9]
+                     , () :& []]
+             , () :& [ () :& []
+                     , () :& []]]
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ traverse push t         *>
+                                 modify sort             *>
+                                 traverse (\_ -> pop) t)    -- <--
+```
+
+```haskell
+tree =  1 :& [  1 :& [  2 :& []         stack = []
+                     ,  3 :& []]
+             ,  4 :& [  5 :& []
+                     ,  9 :& []]]
+```
 
 ## Phases Type
+
+. . .
 
 ```haskell
 data Phases f a where
@@ -479,9 +611,8 @@ runPhases $ sequenceA $ [ phase 4 (out      "a")    --     > d
 ## Sorting Tree Labels
 
 ```haskell
-pop    :: State [a] a
 push   :: a -> State [a] ()
-modify :: ([a] -> [a]) -> State [a] ()
+pop    :: State [a] a
 ```
 
 ```haskell
@@ -496,9 +627,8 @@ sortTree t =
 ## Sorting Tree Labels
 
 ```haskell
-pop    :: State [a] a
 push   :: a -> State [a] ()
-modify :: ([a] -> [a]) -> State [a] ()
+pop    :: State [a] a
 ```
  
  ```haskell
@@ -513,9 +643,8 @@ sortTree t =
 ## Sorting Tree Labels
 
 ```haskell
-pop    :: State [a] a
 push   :: a -> State [a] ()
-modify :: ([a] -> [a]) -> State [a] ()
+pop    :: State [a] a
 ```
  
  ```haskell
@@ -527,7 +656,7 @@ sortTree t =
      phase 3 (traverse (\_ -> pop) t)))
 ```
 
-## Applicative Morphism
+. . .
 
 ```haskell
 traverse (φ . f) = φ . traverse f
@@ -536,9 +665,8 @@ traverse (φ . f) = φ . traverse f
 ## Sorting Tree Labels
 
 ```haskell
-pop    :: State [a] a
 push   :: a -> State [a] ()
-modify :: ([a] -> [a]) -> State [a] ()
+pop    :: State [a] a
 ```
  
  ```haskell
@@ -566,9 +694,8 @@ unzip :: f (a, b) -> (f a, f b)
 ## Sorting Tree Labels
 
 ```haskell
-pop    :: State [a] a
 push   :: a -> State [a] ()
-modify :: ([a] -> [a]) -> State [a] ()
+pop    :: State [a] a
 ```
  
  ```haskell
