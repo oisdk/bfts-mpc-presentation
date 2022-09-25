@@ -37,8 +37,6 @@ patat:
 
 ```haskell
 data Tree   a = a :& [Tree a]
-
-type Forest a = [Tree a]
 ```
 
 . . .
@@ -88,28 +86,26 @@ type Forest a = [Tree a]
              ┗━━━┛                       ┗━━━┛
 ```
 
-<!-- 
+## Traversal Orders
 
-. . .
-
-```haskell
-dfe :: Tree a -> [a]
-dfe (x :& xs) = x : concatMap dfe xs
 ```
+   breadth-first                depth-first
+   ↓     ↓     ↓
+ ┏━━━┓ ┏━━━┓ ┏━━━┓           ┏━━━━━━━━━━━━━━━┓
+ ┃ 3─╂┬╂─1─╂┬╂─1 ┃         → ┃ 3──┬──1──┬──1 ┃
+ ┗━━━┛│┃   ┃│┃   ┃           ┗━━━━┿━━━━━┿━━━━┛
+      │┃   ┃│┃   ┃                │     │┏━━━┓
+      │┃   ┃└╂─5 ┃         →      │     └╂─5 ┃
+      │┃   ┃ ┃   ┃                │      ┗━━━┛
+      │┃   ┃ ┃   ┃                │┏━━━━━━━━━┓
+      └╂─4─╂┬╂─9 ┃         →      └╂─4──┬──9 ┃
+       ┗━━━┛│┃   ┃                 ┗━━━━┿━━━━┛
+            │┃   ┃                      │┏━━━┓
+            └╂─2 ┃         →            └╂─2 ┃
+             ┗━━━┛                       ┗━━━┛
 
-. . .
-
-```haskell
-    ╭                         ╮
-dfe │ 3 :& [ 1 :& [ 1 :& []   │ = [3,1,1,5,4,9,2]
-    │             , 5 :& []]  │
-    │      , 4 :& [ 9 :& []   │
-    │             , 2 :& []]] │
-    ╰                         ╯
-``` 
-
-
--->
+   [3,1,4,2,5,9,2]            [3,1,1,5,4,9,2]
+```
 
 ## Applicative and Traversable
 
@@ -547,6 +543,18 @@ data Phases f a where
 instance Applicative f => Applicative (Phases f) where ...
 ```
 
+## Phases Type: Similarity to ZipList
+
+```haskell
+lzw :: Monoid a => [a] -> [a] -> [a]
+lzw (x:xs) (y:ys) = (x <> y) : lzw xs ys
+lzw []     ys     = ys
+lzw xs     []     = x
+
+instance Monoid a => Monoid (ZipList a) where
+  ZipList xs <> ZipList ys = ZipList (lzw xs ys)
+```
+
 ## Phases Type: usage
 
 . . .
@@ -817,33 +825,6 @@ runEnv (Day c (e,xs) ys) = c xs (ys e)
 repmin = runEnv . repminT
 ```
 
----
-
-# Multiple Phases
-
-```haskell
-data Phases f a where
-  Pure :: a -> Phases f a
-  Link :: (x -> y -> a) -> f x -> Phases f y -> Phases f a
-```
-
-Notice that this is the free applicative.
-
-But the applicative instance we're going to give it isn't:
-
-```haskell
-instance Applicative f => Applicative (Phases f) where
-  pure = Pure
-  Pure f <*> xs = fmap f xs
-  fs <*> Pure x = fmap ($x) fs
-  Link f x xs <*> Link g y ys = Link (\(l,r) (ls,rs) -> f l ls (g r rs)) (x ⊗ y) (xs ⊗ ys)
-```
-
-
----
-
-
----
 -->
 
 # Breadth-First Traversals
@@ -852,60 +833,50 @@ instance Applicative f => Applicative (Phases f) where
 
 ```haskell
 levels :: Tree a → [[a]]
-levels (x :& xs) = [x] : foldr (lzw (++)) [] (map levels xs)
-
-lzw :: (a -> a -> a) -> [a] -> [a] -> [a]
-lzw f (x:xs) (y:ys) = f x y : lzw f xs ys
-lzw _ []     ys     = ys
-lzw _ xs     []     = xs
+levels = go 0 where
+  go n (x :& xs) = level n [x] <> foldr lzw [] (go (n+1) xs)
 ```
 
 . . .
 
 ```haskell
+lzw :: Monoid a => [a] -> [a] -> [a]
+lzw (x:xs) (y:ys) = (x <> y) : lzw xs ys
+lzw []     ys     = ys
+lzw xs     []     = xs
+```
+
+. . .
+
+```haskell
+level :: Monoid a => Int -> a -> [a]
+level 0     x = x
+level (n+1) x = mempty : level n x
+```
+
+## Breadth-First Enumeration
+
+```haskell
+levels :: Tree a → [[a]]
+levels = go 0 where
+  go n (x :& xs) = level n [x] <> foldr lzw [] (go (n+1) xs)
+```
+
+```haskell
        ╭                         ╮
-levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[1],[1,4],[1,5,9,2]]
+levels │ 3 :& [ 1 :& [ 1 :& []   │ = [[3],[1,4],[1,5,9,2]]
        │             , 5 :& []]  │
        │      , 4 :& [ 9 :& []   │
        │             , 2 :& []]] │
        ╰                         ╯
 ```
 
-
-## Breadth-First Enumeration
-
-```
-
-   3──┬──1──┬──1
-      │     │
-      │     └──5
-      │
-      └──4──┬──9
-            │
-            └──2
-```
-
-
-## Breadth-First Enumeration
-
-```
- ┏━━━┓ ┏━━━┓ ┏━━━┓
- ┃ 3─╂┬╂─1─╂┬╂─1 ┃
- ┗━━━┛│┃   ┃│┃   ┃
-      │┃   ┃└╂─5 ┃
-      │┃   ┃ ┃   ┃
-      └╂─4─╂┬╂─9 ┃
-       ┗━━━┛│┃   ┃
-            └╂─2 ┃
-             ┗━━━┛
-```
-
-## Breadth-First Traversal!
+## Breadth-First Traversal
 
 ```haskell
 bft :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
-bft f = runPhases . go where 
-  go (x :& xs) = (:&) <$> now (f x) <*> later (traverse go xs)
+bft f = runPhases . go 0 where 
+  go n (x :& xs) = (:&) <$> phase n (f x) <*> traverse (go (n+1)) xs
 ```
 
 . . .
