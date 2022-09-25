@@ -716,6 +716,22 @@ sortTree :: Ord a => Tree a -> Tree a
 sortTree t = 
    flip evalState [] $ runPhases $
      phase 2 (modify sort)                         *>
+             (traverse (\x -> phase 1 (push x)) t) *>
+             (traverse (\_ -> phase 3 pop) t)
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+ 
+ ```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = 
+   flip evalState [] $ runPhases $
+     phase 2 (modify sort)                         *>
               traverse (\x -> phase 1 (push x)     *> 
                               phase 3 pop) t
 ```
