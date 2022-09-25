@@ -34,11 +34,11 @@ patat:
 - PROGRAMMER:
 
 ```haskell
-main = do putStrLn "a"
-          putStrLn "b"
-          putStrLn "c"
-          putStrLn "d"
-          putStrLn "e"
+main = do print "a"
+          print "b"
+          print "c"
+          print "d"
+          print "e"
 ```
 
 - CLIENT: "No! I want them in this order: **bedca**"
@@ -46,24 +46,26 @@ main = do putStrLn "a"
 - PROGRAMMER:
 
    ```haskell
-   main = do putStrLn "b"
-             putStrLn "e"
-             putStrLn "d"
-             putStrLn "c"
-             putStrLn "a"
+   main = do print "b"
+             print "e"
+             print "d"
+             print "c"
+             print "a"
    ```
 
 - CLIENT: "Yuck! I want the **source code** to have the letters in alphabetical
   order!" 
   
-- PROGRAMMER (has just read "**Breadth-First Traversals Via Staging**"):
+- PROGRAMMER (has just read "*Breadth-First Traversals Via Staging*"):
+
+. . .
 
 ```haskell
-main = runPhases $ do phase 5 "a"
-                      phase 1 "b"
-                      phase 4 "c"
-                      phase 3 "d"
-                      phase 2 "e"
+main = runPhases $ do phase 5 (print "a")
+                      phase 1 (print "b")
+                      phase 4 (print "c")
+                      phase 3 (print "d")
+                      phase 2 (print "e")
 ```
 
 . . .
@@ -84,18 +86,17 @@ a
 
 - Takeaway: a technique for **staging** effectful computations
 
-    * The ability to **reorder** effects and values, **independently** of 
-      each other.
+    * The ability to **reorder** effects **without** reordering the syntactic
+      expressions that give rise to those effects.
+      
+    * Alternatively: the ability to reorder the **effect** part of effectful
+      computations **without** reordering the **pure** part.
+      
+- Applying this technique to problems like *repmin*, *sort-tree*, and
+  culminating in *breadth-first traversal*
 
-- Topics
-
-    * Basic traversals, algorithms
-
-    * Problems like *repmin*, *sort tree*
-    
-    * *Applicatives*, *Traversables*, and *Free Applicatives*
-
-
+- Using some of the theory of *Applicatives*, *Traversables*, and *Free
+  Applicatives*
 
 ## Important Types
 
@@ -179,8 +180,9 @@ class Foldable t => Traversable t where
   traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
 ```
 
+# Renumbering
 
-## Renumbering with Traverse
+## Renumbering: The spec
 
 ```haskell
 renumber :: Tree a -> Tree Int
@@ -220,191 +222,19 @@ renumber t = evalState (traverse num t) 1
   where num _ = get <* modify succ
 ```
 
-
-
-<!-- 
-## Bird's repmin problem
-
-. . .
-
-```haskell
-       ╭                         ╮
-repmin │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 1 :& [ 1 :& []
-       │             , 5 :& []]  │               , 1 :& []]
-       │      , 4 :& [ 9 :& []   │        , 1 :& [ 1 :& []
-       │             , 2 :& []]] │               , 1 :& []]]
-       ╰                         ╯
-```
-
-. . .
-
-```haskell
-repmin :: Tree Int -> Tree Int
-repmin t = let m = minimum t in fmap (const m) t
-```
-
-## Repmin as a Traverse
-
-
-- 2 operations: minimum, and replacing.
-
-- Min can be done with the writer effect, and the "min" monoid.
-
-- Replace can be done with the reader effect.
-
-## Replace
-
-. . .
-
-```haskell
-ask       :: Reader e e
-runReader :: Reader e a -> e -> a
-```
-
-. . .
-
-```haskell
-replace :: Traversable t => t a -> e -> t e
-replace t = runReader (traverse (const ask) t)
-```
-
-
-## Minimum
-
-. . .
-
-```haskell
-tell       :: Monoid w => w -> Writer w ()
-execWriter :: Writer w a -> w
-
-execWriter (x <*> y) = execWriter x <> execWriter y
-```
-
-. . .
-
-```haskell
-data ⌈ a ⌉ = In a | Top
-instance Ord a => Monoid ⌈ a ⌉ where (<>) = min
-inBound (In x) = x
-```
-
-. . .
-
-```haskell
-minimum :: (Ord a, Traversable t) => t a -> a
-minimum = inBound . execWriter . traverse (tell . In)
-```
-
-## Combining
-
-```haskell
-repmin :: (Ord a, Traversable t) => t a -> t a
-repmin t = replace t (minimum t)
-```
-
-## Day Convolution
-
-
-```haskell
-data Day f g a where
-  (:<*>) :: f (a -> b) -> g a -> Day f g b
-
-instance (Applicative f, Applicative g) => Applicative (Day f g) where ...
-
-phase1 :: Applicative g => f a -> Day f g a
-phase2 :: Applicative f => g a -> Day f g a
-```
-
-## Day Convolution for Fusing
-
-```haskell
-repmin  :: (Traversable t, Ord a) => t a -> t a
-
-
-repmin  t = replace t (minimum t)
-```
-
-## Day Convolution for Fusing
-
-```haskell
-repmin  :: (Traversable t, Ord a) => t a -> t a
-
-
-repmin  t = 
-  runReader  (traverse (\_ -> inBound <$> ask) t) $
-  execWriter (traverse (\x -> tell (In x)) t)
-```
-
-## Day Convolution for Fusing
-
-```haskell
-repminE :: (Traversable t, Ord a) 
-        => t a 
-        -> Day (Writer ⌈ a ⌉) (Reader ⌈ a ⌉) (t a)
-repminE t = 
-  phase2     (traverse (\_ -> inBound <$> ask) t) <*
-  phase1     (traverse (\x -> tell (In x)) t)
-```
-
-. . .
-
-```haskell
-repmin :: (Traversable t, Ord a) => t a -> t a
-repmin = loopDay . repminE
-
-loopDay :: Day (Writer a) (Reader a) b -> b
-loopDay (xs :<*> ys) = 
-  let (x, e) = runWriter xs 
-  in  x (runReader ys e)
-```
-
-## Day Convolution for Fusing
-
-```haskell
-repminE :: (Traversable t, Ord a) 
-        => t a 
-        -> Day (Writer ⌈ a ⌉) (Reader ⌈ a ⌉) (t a)
-repminE t = 
-             (traverse (\_ -> phase2 (inBound <$> ask)) t) <*
-             (traverse (\x -> phase1 (tell (In x))) t)
-```
-
-```haskell
-repmin :: (Traversable t, Ord a) => t a -> t a
-repmin = loopDay . repminE
-
-loopDay :: Day (Writer a) (Reader a) b -> b
-loopDay (xs :<*> ys) = 
-  let (x, e) = runWriter xs 
-  in  x (runReader ys e)
-```
-
-## Day Convolution for Fusing
-
-```haskell
-repminE :: (Traversable t, Ord a) 
-        => t a 
-        -> Day (Writer ⌈ a ⌉) (Reader ⌈ a ⌉) (t a)
-repminE t = 
-              traverse (\x -> phase2 (inBound <$> ask) <* 
-                              phase1 (tell (In x))) t
-```
-
-```haskell
-repmin :: (Traversable t, Ord a) => t a -> t a
-repmin = loopDay . repminE
-
-loopDay :: Day (Writer a) (Reader a) b -> b
-loopDay (xs :<*> ys) = 
-  let (x, e) = runWriter xs 
-  in  x (runReader ys e)
-```
-
-# Multiple Phases 
-
--->
-
 # Fusing traversals with Staging
+
+## Fusion
+
+```haskell
+map f . map g = map (f . g)
+```
+
+. . .
+
+```haskell
+φ . traverse f = traverse (φ . f)
+```
 
 ## Sorting Tree Labels
 
@@ -570,6 +400,23 @@ tree =  1 :& [  1 :& [  2 :& []         stack = []
              ,  4 :& [  5 :& []
                      ,  9 :& []]]
 ```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = flip evalState [] $ traverse push t         *>
+                                 modify sort             *>
+                                 traverse (\_ -> pop) t
+```
+
+
+**Can we do it with one traverse?**
 
 ## Phases Type
 
