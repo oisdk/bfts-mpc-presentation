@@ -8,13 +8,84 @@ patat:
 
 ...
 
-# Introduction
+# Blank
 
-## Overview
+## Breadth-First Traversals via Staging
 
 - Jeremy Gibbons, *Oisín Kidney*, Tom Schrijvers, and Nicolas Wu
+```
+       ^             ^               ^               ^
+       ┃             ┃               ┃               ┃
+    Oxford           ┃           KU Leuven           ┃
+                     ┃                               ┃
+                     ┃                               ┃
+                     ┗━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┛
+                                  Imperial
+```
 
-- **Traversals** of **Trees**
+- MPC 2022
+
+# Introduction
+
+## A Real-World Problem
+
+- CLIENT: "I would like the letters 'a' to 'e' printed out!"
+
+- PROGRAMMER:
+
+```haskell
+main = do putStrLn "a"
+          putStrLn "b"
+          putStrLn "c"
+          putStrLn "d"
+          putStrLn "e"
+```
+
+- CLIENT: "No! I want them in this order: **bedca**"
+
+- PROGRAMMER:
+
+   ```haskell
+   main = do putStrLn "b"
+             putStrLn "e"
+             putStrLn "d"
+             putStrLn "c"
+             putStrLn "a"
+   ```
+
+- CLIENT: "Yuck! I want the **source code** to have the letters in alphabetical
+  order!" 
+  
+- PROGRAMMER (has just read "**Breadth-First Traversals Via Staging**"):
+
+```haskell
+main = runPhases $ do phase 5 "a"
+                      phase 1 "b"
+                      phase 4 "c"
+                      phase 3 "d"
+                      phase 2 "e"
+```
+
+. . .
+
+```haskell
+>>> main
+b
+e
+d
+c
+a
+```
+
+- CLIENT: "Good! Here is a raise. Your next assignment is to figure out the
+  **category theoretic principles** underlying that piece of code."
+  
+## Overview
+
+- Takeaway: a technique for **staging** effectful computations
+
+    * The ability to **reorder** effects and values, **independently** of 
+      each other.
 
 - Topics
 
@@ -24,11 +95,6 @@ patat:
     
     * *Applicatives*, *Traversables*, and *Free Applicatives*
 
-- Takeaway: a technique for **staging** effectful computations
-
-    * The ability to **reorder** effects and values, **independently** of 
-      each other.
-
 
 
 ## Important Types
@@ -36,7 +102,7 @@ patat:
 . . .
 
 ```haskell
-data Tree   a = a :& [Tree a]
+data Tree a = a :& [Tree a]
 ```
 
 . . .
@@ -64,26 +130,6 @@ data Tree   a = a :& [Tree a]
             │                           │
             │                           │
             └──2                        └──2
-```
-
-
-## Traversal Orders
-
-```
-   breadth-first                depth-first
-   ↓     ↓     ↓
- ┏━━━┓ ┏━━━┓ ┏━━━┓           ┏━━━━━━━━━━━━━━━┓
- ┃ 3─╂┬╂─1─╂┬╂─1 ┃         → ┃ 3──┬──1──┬──1 ┃
- ┗━━━┛│┃   ┃│┃   ┃           ┗━━━━┿━━━━━┿━━━━┛
-      │┃   ┃│┃   ┃                │     │┏━━━┓
-      │┃   ┃└╂─5 ┃         →      │     └╂─5 ┃
-      │┃   ┃ ┃   ┃                │      ┗━━━┛
-      │┃   ┃ ┃   ┃                │┏━━━━━━━━━┓
-      └╂─4─╂┬╂─9 ┃         →      └╂─4──┬──9 ┃
-       ┗━━━┛│┃   ┃                 ┗━━━━┿━━━━┛
-            │┃   ┃                      │┏━━━┓
-            └╂─2 ┃         →            └╂─2 ┃
-             ┗━━━┛                       ┗━━━┛
 ```
 
 ## Traversal Orders
@@ -136,13 +182,24 @@ class Foldable t => Traversable t where
 
 ## Renumbering with Traverse
 
-. . .
-
 ```haskell
 renumber :: Tree a -> Tree Int
 ```
 
-. . .
+```haskell
+         ╭                         ╮
+renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 3 :& []
+         │             , 5 :& []]  │               , 4 :& []]
+         │      , 4 :& [ 9 :& []   │        , 5 :& [ 6 :& []
+         │             , 2 :& []]] │               , 7 :& []]]
+         ╰                         ╯
+```
+
+## Renumbering with Traverse
+
+```haskell
+renumber :: Tree a -> Tree Int
+```
 
 ```haskell
 get       ::                 State Int Int
@@ -163,16 +220,6 @@ renumber t = evalState (traverse num t) 1
   where num _ = get <* modify succ
 ```
 
-## Renumbering with Traverse
-
-```haskell
-         ╭                         ╮
-renumber │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 2 :& [ 3 :& []
-         │             , 5 :& []]  │               , 4 :& []]
-         │      , 4 :& [ 9 :& []   │        , 5 :& [ 6 :& []
-         │             , 2 :& []]] │               , 7 :& []]]
-         ╰                         ╯
-```
 
 
 <!-- 
@@ -365,8 +412,6 @@ loopDay (xs :<*> ys) =
 sortTree :: Ord a => Tree a -> Tree a
 ```
 
-. . .
-
 ```haskell
          ╭                         ╮
 sortTree │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 1 :& [ 2 :& []
@@ -389,7 +434,7 @@ pop    :: State [a] a
 sortTree :: Ord a => Tree a -> Tree a
 sortTree t = flip evalState [] $ traverse push t         *>
                                  modify sort             *>
-                                 traverse (\_ -> pop) t)
+                                 traverse (\_ -> pop) t
 ```
 . . .
 
@@ -411,7 +456,7 @@ pop    :: State [a] a
 sortTree :: Ord a => Tree a -> Tree a
 sortTree t = flip evalState [] $ traverse push t         *> -- <--
                                  modify sort             *>
-                                 traverse (\_ -> pop) t)
+                                 traverse (\_ -> pop) t
 ```
 
 ```haskell
@@ -432,7 +477,7 @@ pop    :: State [a] a
 sortTree :: Ord a => Tree a -> Tree a
 sortTree t = flip evalState [] $ traverse push t         *> -- <--
                                  modify sort             *>
-                                 traverse (\_ -> pop) t)
+                                 traverse (\_ -> pop) t
 ```
 
 ```haskell
@@ -453,7 +498,7 @@ pop    :: State [a] a
 sortTree :: Ord a => Tree a -> Tree a
 sortTree t = flip evalState [] $ traverse push t         *>
                                  modify sort             *> -- <--
-                                 traverse (\_ -> pop) t)
+                                 traverse (\_ -> pop) t
 ```
 
 ```haskell
@@ -474,7 +519,7 @@ pop    :: State [a] a
 sortTree :: Ord a => Tree a -> Tree a
 sortTree t = flip evalState [] $ traverse push t         *>
                                  modify sort             *> -- <--
-                                 traverse (\_ -> pop) t)
+                                 traverse (\_ -> pop) t
 ```
 
 ```haskell
@@ -495,7 +540,7 @@ pop    :: State [a] a
 sortTree :: Ord a => Tree a -> Tree a
 sortTree t = flip evalState [] $ traverse push t         *>
                                  modify sort             *>
-                                 traverse (\_ -> pop) t)    -- <--
+                                 traverse (\_ -> pop) t    -- <--
 ```
 
 ```haskell
@@ -516,7 +561,7 @@ pop    :: State [a] a
 sortTree :: Ord a => Tree a -> Tree a
 sortTree t = flip evalState [] $ traverse push t         *>
                                  modify sort             *>
-                                 traverse (\_ -> pop) t)    -- <--
+                                 traverse (\_ -> pop) t    -- <--
 ```
 
 ```haskell
@@ -541,18 +586,6 @@ data Phases f a where
 
 ```haskell
 instance Applicative f => Applicative (Phases f) where ...
-```
-
-## Phases Type: Similarity to ZipList
-
-```haskell
-lzw :: Monoid a => [a] -> [a] -> [a]
-lzw (x:xs) (y:ys) = (x <> y) : lzw xs ys
-lzw []     ys     = ys
-lzw xs     []     = x
-
-instance Monoid a => Monoid (ZipList a) where
-  ZipList xs <> ZipList ys = ZipList (lzw xs ys)
 ```
 
 ## Phases Type: usage
@@ -642,7 +675,7 @@ sortTree t =
   flip evalState [] $
              traverse push t                      *>
              modify sort                          *>
-             traverse (\_ -> pop) t)
+             traverse (\_ -> pop) t
  ```
  
 ## Sorting Tree Labels
@@ -658,7 +691,7 @@ sortTree t =
    flip evalState [] $ runPhases $
      phase 1 (traverse push t)                     *>
      phase 2 (modify sort)                         *>
-     phase 3 (traverse (\_ -> pop) t)))
+     phase 3 (traverse (\_ -> pop) t))
 ```
 
 ## Sorting Tree Labels
@@ -674,7 +707,7 @@ sortTree t =
    flip evalState [] $ runPhases $
      phase 2 (modify sort)                         *>
      phase 1 (traverse push t)                     *>
-     phase 3 (traverse (\_ -> pop) t)))
+     phase 3 (traverse (\_ -> pop) t))
 ```
 
 . . .
