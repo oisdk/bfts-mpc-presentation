@@ -608,6 +608,19 @@ runPhases $ sequenceA $ [ phase 4 (out      "a")    --     > d
 ["a","b","c","d","e"]
 ```
 
+## Phases Type: Commutativity
+
+```haskell
+                         n /= m
+-------------------------------------------------------------
+  phase n x ⊗ phase m y = twist <$> (phase m y ⊗ phase n x)
+```
+
+```haskell
+twist :: (a, b) -> (b, a)
+```
+
+
 ## Sorting Tree Labels
 
 ```haskell
