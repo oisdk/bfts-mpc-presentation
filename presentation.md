@@ -363,6 +363,43 @@ loopDay (xs :<*> ys) =
 
 # Fusing traversals with Staging
 
+## Sorting Tree Labels
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+```
+
+. . .
+
+```haskell
+         ╭                         ╮
+sortTree │ 3 :& [ 1 :& [ 1 :& []   │ = 1 :& [ 1 :& [ 2 :& []
+         │             , 5 :& []]  │               , 3 :& []]
+         │      , 4 :& [ 9 :& []   │        , 4 :& [ 5 :& []
+         │             , 2 :& []]] │               , 9 :& []]]
+         ╰                         ╯
+```
+
+## Sorting Tree Labels
+
+```haskell
+pop    :: State [a] a
+push   :: a -> State [a] ()
+modify :: ([a] -> [a]) -> State [a] ()
+```
+
+. . .
+
+```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t =
+  flip evalState [] $
+             traverse push t                      *>
+             modify sort                          *>
+             traverse (\_ -> pop) t)
+ ```
+
+
 ## Phases Type
 
 ```haskell
@@ -442,11 +479,10 @@ runPhases $ sequenceA $ [ phase 4 (out      "a")    --     > d
 ## Sorting Tree Labels
 
 ```haskell
-pop  :: State [a] a
-push :: a -> State [a] ()
+pop    :: State [a] a
+push   :: a -> State [a] ()
+modify :: ([a] -> [a]) -> State [a] ()
 ```
-
-. . .
 
 ```haskell
 sortTree :: Ord a => Tree a -> Tree a
@@ -460,8 +496,9 @@ sortTree t =
 ## Sorting Tree Labels
 
 ```haskell
-pop  :: State [a] a
-push :: a -> State [a] ()
+pop    :: State [a] a
+push   :: a -> State [a] ()
+modify :: ([a] -> [a]) -> State [a] ()
 ```
  
  ```haskell
@@ -476,8 +513,9 @@ sortTree t =
 ## Sorting Tree Labels
 
 ```haskell
-pop  :: State [a] a
-push :: a -> State [a] ()
+pop    :: State [a] a
+push   :: a -> State [a] ()
+modify :: ([a] -> [a]) -> State [a] ()
 ```
  
  ```haskell
@@ -498,8 +536,9 @@ traverse (φ . f) = φ . traverse f
 ## Sorting Tree Labels
 
 ```haskell
-pop  :: State [a] a
-push :: a -> State [a] ()
+pop    :: State [a] a
+push   :: a -> State [a] ()
+modify :: ([a] -> [a]) -> State [a] ()
 ```
  
  ```haskell
@@ -527,8 +566,9 @@ unzip :: f (a, b) -> (f a, f b)
 ## Sorting Tree Labels
 
 ```haskell
-pop  :: State [a] a
-push :: a -> State [a] ()
+pop    :: State [a] a
+push   :: a -> State [a] ()
+modify :: ([a] -> [a]) -> State [a] ()
 ```
  
  ```haskell
