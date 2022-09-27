@@ -1,5 +1,5 @@
 ---
-title: Breadth-First Traversals via Staging
+title: Breadth-First Traversals Via Staging
 patat:
   theme:
     codeBlock: [vividBlack]
@@ -84,19 +84,21 @@ a
   
 ## Overview
 
-- Takeaway: a technique for **staging** effectful computations
+- Takeaway: a technique for **staging** effectful computations, using *Phases*
 
-    * The ability to **reorder** effects **without** reordering the syntactic
-      expressions that give rise to those effects.
-      
-    * Alternatively: the ability to reorder the **effect** part of effectful
-      computations **without** reordering the **pure** part.
-      
-- Applying this technique to problems like *repmin*, *sort-tree*, and
-  culminating in *breadth-first traversal*
+    * The ability to **reorder** effects **without** reordering the expressions
+      that give rise to those effects.
+    
+- In the paper:
 
-- Using some of the theory of *Applicatives*, *Traversables*, and *Free
-  Applicatives*
+    * Theory and implementation of the Phases type
+
+    * With some of the theory of *Applicatives*, *Traversables*, and *Free
+      Applicatives*
+      
+- In this talk:
+
+    * How to **use** *Phases* for *sort-tree*, *breadth-first traversal*...
 
 ## Important Types
 
@@ -418,6 +420,38 @@ sortTree t = flip evalState [] $ traverse push t         *>
 
 **Can we do it with one traverse?**
 
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+ 
+ ```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t = 
+   flip evalState [] $ runPhases $
+     phase 1 (traverse push t)                     *>
+     phase 2 (modify sort)                         *>
+     phase 3 (traverse (\_ -> pop) t))
+```
+
+## Sorting Tree Labels
+
+```haskell
+push   :: a -> State [a] ()
+pop    :: State [a] a
+```
+ 
+ ```haskell
+sortTree :: Ord a => Tree a -> Tree a
+sortTree t =
+   flip evalState [] $ runPhases $
+     phase 2 (modify sort)                         *>
+     phase 1 (traverse push t)                     *>
+     phase 3 (traverse (\_ -> pop) t))
+```
+
 ## Phases Type
 
 . . .
@@ -433,6 +467,19 @@ data Phases f a where
 
 ```haskell
 instance Applicative f => Applicative (Phases f) where ...
+```
+
+. . .
+
+```haskell
+instance Monad f => Monad (Phases f) ✗
+```
+
+. . .
+
+```haskell
+main = (putStr "What's your name? " *> getLine) >>= 
+       \n -> putStr ("Hello, " ++ n)
 ```
 
 ## Phases Type: usage
@@ -518,39 +565,6 @@ n /= m ==>
 
 ```haskell
 n /= m ==> phase n x `CommutesWith` phase m y
-```
-
-
-## Sorting Tree Labels
-
-```haskell
-push   :: a -> State [a] ()
-pop    :: State [a] a
-```
-
-```haskell
-sortTree :: Ord a => Tree a -> Tree a
-sortTree t =
-  flip evalState [] $
-             traverse push t                      *>
-             modify sort                          *>
-             traverse (\_ -> pop) t
- ```
- 
-## Sorting Tree Labels
-
-```haskell
-push   :: a -> State [a] ()
-pop    :: State [a] a
-```
- 
- ```haskell
-sortTree :: Ord a => Tree a -> Tree a
-sortTree t = 
-   flip evalState [] $ runPhases $
-     phase 1 (traverse push t)                     *>
-     phase 2 (modify sort)                         *>
-     phase 3 (traverse (\_ -> pop) t))
 ```
 
 ## Sorting Tree Labels
@@ -653,6 +667,28 @@ sortTree t =
    [3,1,4,2,5,9,2]            [3,1,1,5,4,9,2]
 ```
 
+## Depth-First Traversal
+
+```haskell
+traverse :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
+traverse f (x :& xs) = (:&) <$> f x <*> traverse (traverse f) xs
+```
+
+## Depth-First Traversal
+
+```haskell
+traverse :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
+traverse f (x :& xs) = ⦇ f x :& traverse (traverse f) xs ⦈
+```
+
+. . .
+
+```haskell
+fmap :: (a -> b) -> Tree a -> Tree b
+fmap f (x :& xs) = f x :& fmap (fmap f) xs
+```
+
+
 ## Level-Wise Enumeration
 
 ```
@@ -693,14 +729,6 @@ relevel = go 0 where
   go n (x :& xs) = n :& map (go (n+1)) xs
 ```
 
-
-## Depth-First Traversal
-
-```haskell
-traverse :: Applicative f => (a -> f b) -> Tree a -> f (Tree b)
-traverse f = go where
-  go (x :& xs) = (:&) <$> f x <*> traverse go xs
-```
 
 ## Combination
 
